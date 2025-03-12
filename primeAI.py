@@ -6,9 +6,9 @@ from sklearn.linear_model import LinearRegression
 
 # Connect to MariaDB
 def get_numbers_from_db(limit=100):
-    connection = pymysql.connect(host='your_host', user='your_user', password='your_password', database='your_db')
+    connection = pymysql.connect(host='192.168.1.73', user='suirl', password='letmeinnow', database='primes')
     cursor = connection.cursor()
-    cursor.execute(f"SELECT number FROM numbers_table ORDER BY id ASC LIMIT {limit}")
+    cursor.execute(f"SELECT multiPrimeNumber FROM multiPrimes ORDER BY id ASC LIMIT {limit}")
     numbers = [row[0] for row in cursor.fetchall()]
     connection.close()
     return numbers
