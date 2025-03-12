@@ -1,7 +1,9 @@
+import os
 import pymysql
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras import Sequential, layers
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import Dense
 from sklearn.linear_model import LinearRegression
 
 # Connect to MariaDB
@@ -33,18 +35,26 @@ def detect_pattern(numbers):
 
     return "Pattern is unclear, using AI prediction."
 
-# Train the neural network model
-def train_model(numbers):
-    X = np.array(range(len(numbers))).reshape(-1, 1)  # Indices as input
-    y = np.array(numbers)  # Numbers as output
+# Train or update the neural network model
+def train_model(numbers, epochs=50):
+    X = np.array(range(len(numbers))).reshape(-1, 1)
+    y = np.array(numbers)
 
-    model = Sequential([
-        layers.Dense(10, activation='relu', input_shape=(1,)),
-        layers.Dense(1)
-    ])
+    if os.path.exists("prime_model.keras"):
+        print("Loading existing model for continual learning...")
+        model = load_model("prime_model.keras", compile=False)
+        model.compile(optimizer='adam', loss='mean_squared_error')
+    else:
+        print("Training a new model...")
+        model = Sequential([
+            Dense(10, activation='relu', input_shape=(1,)),
+            Dense(1)
+        ])
+        model.compile(optimizer='adam', loss='mean_squared_error')
 
-    model.compile(optimizer='adam', loss='mse')
-    model.fit(X, y, epochs=500, verbose=0)
+    model.fit(X, y, epochs=epochs, verbose=0)
+
+    model.save("prime_model.keras")  # Save using .keras format
     return model
 
 # Train a simple Linear Regression model (backup option)
@@ -57,13 +67,19 @@ def train_regression(numbers):
 
 # Predict the next number
 def predict_next(model, length):
-    return model.predict(np.array([[length]]))[0][0]
+    input_data = np.array([[length]], dtype=np.float32)  # Ensure fixed shape & type
+    return model.predict(input_data, verbose=0)[0][0]  # Suppress extra logging
 
-# Main logic loop
+# Main logic loop with continual learning
 def run_prediction_loop():
     known_numbers = get_numbers_from_db(100)
-    model = train_model(known_numbers)  # Initial training
-    
+
+    # Load or train model
+    if os.path.exists("prime_model.h5"):
+        model = load_model("prime_model.h5")
+    else:
+        model = train_model(known_numbers)
+
     while True:
         pattern_description = detect_pattern(known_numbers)
         print(f"Detected pattern: {pattern_description}")
@@ -76,9 +92,10 @@ def run_prediction_loop():
         if predicted_number == actual_number:
             known_numbers.append(actual_number)  # Continue predicting
         else:
-            print("Prediction failed. Recalculating with new data...")
-            known_numbers = get_numbers_from_db(len(known_numbers) + 1)  # Get the updated dataset
-            model = train_model(known_numbers)  # Retrain the model
+            print("Prediction failed. Updating model with new data...")
+            known_numbers.append(actual_number)
+            model = train_model(known_numbers, epochs=10)  # Fine-tune instead of full retrain
 
 # Run the loop
 run_prediction_loop()
+
